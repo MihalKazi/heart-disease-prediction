@@ -11,12 +11,15 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from datetime import datetime
 import os
+import io
+
+# ReportLab imports for PDF generation
 from reportlab.lib.pagesizes import letter
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import inch
 from reportlab.lib import colors
-import io
+from reportlab.lib.enums import TA_CENTER, TA_LEFT
 
 # Set page config
 st.set_page_config(
@@ -224,122 +227,257 @@ def save_prediction_log(user_data, prediction, probability):
 
 def generate_pdf_report(user_data, prediction, probability, feature_importance=None):
     """Generate PDF report of the prediction"""
-    buffer = io.BytesIO()
-    doc = SimpleDocTemplate(buffer, pagesize=letter)
-    styles = getSampleStyleSheet()
-    story = []
-    
-    # Title
-    title_style = ParagraphStyle(
-        'CustomTitle',
-        parent=styles['Heading1'],
-        fontSize=24,
-        spaceAfter=30,
-        alignment=1  # Center alignment
-    )
-    story.append(Paragraph("Heart Disease Prediction Report", title_style))
-    story.append(Spacer(1, 20))
-    
-    # Prediction Result
-    result_text = "HIGH RISK" if prediction == 1 else "LOW RISK"
-    result_color = colors.red if prediction == 1 else colors.green
-    
-    result_style = ParagraphStyle(
-        'ResultStyle',
-        parent=styles['Heading2'],
-        fontSize=18,
-        textColor=result_color,
-        alignment=1
-    )
-    story.append(Paragraph(f"Prediction: {result_text}", result_style))
-    story.append(Paragraph(f"Confidence: {probability:.2%}", result_style))
-    story.append(Spacer(1, 20))
-    
-    # Patient Data
-    story.append(Paragraph("Patient Information", styles['Heading2']))
-    
-    # Create table for patient data
-    feature_names = {
-        'age': 'Age (years)',
-        'sex': 'Sex (0: Female, 1: Male)',
-        'cp': 'Chest Pain Type',
-        'trestbps': 'Resting Blood Pressure (mm Hg)',
-        'chol': 'Cholesterol (mg/dl)',
-        'fbs': 'Fasting Blood Sugar > 120 mg/dl',
-        'restecg': 'Resting ECG Results',
-        'thalach': 'Maximum Heart Rate Achieved',
-        'exang': 'Exercise Induced Angina',
-        'oldpeak': 'ST Depression',
-        'slope': 'Slope of Peak Exercise ST Segment',
-        'ca': 'Number of Major Vessels',
-        'thal': 'Thalassemia'
-    }
-    
-    table_data = [['Feature', 'Value']]
-    for key, value in user_data.items():
-        if key in feature_names:
-            table_data.append([feature_names[key], str(value)])
-    
-    table = Table(table_data)
-    table.setStyle(TableStyle([
-        ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
-        ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
-        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-        ('FONTSIZE', (0, 0), (-1, 0), 14),
-        ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
-        ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
-        ('TEXTCOLOR', (0, 1), (-1, -1), colors.black),
-        ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
-        ('FONTSIZE', (0, 1), (-1, -1), 12),
-        ('GRID', (0, 0), (-1, -1), 1, colors.black)
-    ]))
-    story.append(table)
-    
-    # Recommendations
-    story.append(Spacer(1, 20))
-    story.append(Paragraph("Recommendations", styles['Heading2']))
-    
-    if prediction == 1:
-        recommendations = [
-            "Consult with a cardiologist immediately",
-            "Follow a heart-healthy diet low in saturated fats",
-            "Engage in regular, moderate exercise as approved by your doctor",
-            "Monitor blood pressure and cholesterol levels regularly",
-            "Consider stress management techniques",
-            "Avoid smoking and limit alcohol consumption"
+    try:
+        buffer = io.BytesIO()
+        doc = SimpleDocTemplate(
+            buffer, 
+            pagesize=letter,
+            rightMargin=72,
+            leftMargin=72,
+            topMargin=72,
+            bottomMargin=18
+        )
+        styles = getSampleStyleSheet()
+        story = []
+        
+        # Custom styles
+        title_style = ParagraphStyle(
+            'CustomTitle',
+            parent=styles['Heading1'],
+            fontSize=24,
+            spaceAfter=30,
+            alignment=TA_CENTER,
+            textColor=colors.darkblue
+        )
+        
+        result_style = ParagraphStyle(
+            'ResultStyle',
+            parent=styles['Heading2'],
+            fontSize=18,
+            spaceAfter=20,
+            alignment=TA_CENTER
+        )
+        
+        normal_bold = ParagraphStyle(
+            'NormalBold',
+            parent=styles['Normal'],
+            fontSize=12,
+            spaceAfter=12,
+            fontName='Helvetica-Bold'
+        )
+        
+        # Title
+        story.append(Paragraph("❤️ Heart Disease Prediction Report", title_style))
+        story.append(Spacer(1, 20))
+        
+        # Report metadata
+        current_time = datetime.now().strftime("%B %d, %Y at %I:%M %p")
+        story.append(Paragraph(f"<b>Report Generated:</b> {current_time}", styles['Normal']))
+        story.append(Paragraph(f"<b>Model Used:</b> Machine Learning Classifier", styles['Normal']))
+        story.append(Spacer(1, 30))
+        
+        # Prediction Result
+        result_text = "HIGH RISK" if prediction == 1 else "LOW RISK"
+        result_color = colors.red if prediction == 1 else colors.green
+        
+        # Update result style with color
+        result_style_colored = ParagraphStyle(
+            'ResultStyleColored',
+            parent=result_style,
+            textColor=result_color
+        )
+        
+        story.append(Paragraph(f"<b>Prediction Result: {result_text}</b>", result_style_colored))
+        story.append(Paragraph(f"<b>Confidence Level: {probability:.1%}</b>", result_style_colored))
+        story.append(Spacer(1, 30))
+        
+        # Patient Information Section
+        story.append(Paragraph("Patient Information", styles['Heading2']))
+        story.append(Spacer(1, 12))
+        
+        # Feature descriptions for better readability
+        feature_names = {
+            'age': 'Age (years)',
+            'sex': 'Gender',
+            'cp': 'Chest Pain Type',
+            'trestbps': 'Resting Blood Pressure (mm Hg)',
+            'chol': 'Serum Cholesterol (mg/dl)',
+            'fbs': 'Fasting Blood Sugar > 120 mg/dl',
+            'restecg': 'Resting ECG Results',
+            'thalach': 'Maximum Heart Rate Achieved',
+            'exang': 'Exercise Induced Angina',
+            'oldpeak': 'ST Depression Induced by Exercise',
+            'slope': 'Slope of Peak Exercise ST Segment',
+            'ca': 'Number of Major Vessels (0-4)',
+            'thal': 'Thalassemia'
+        }
+        
+        # Value interpretations
+        def format_value(key, value):
+            if key == 'sex':
+                return "Female" if value == 0 else "Male"
+            elif key == 'cp':
+                cp_types = ["Typical Angina", "Atypical Angina", "Non-anginal Pain", "Asymptomatic"]
+                return f"{value} ({cp_types[int(value)] if 0 <= int(value) <= 3 else 'Unknown'})"
+            elif key == 'fbs':
+                return "No" if value == 0 else "Yes"
+            elif key == 'restecg':
+                ecg_types = ["Normal", "ST-T Wave Abnormality", "LV Hypertrophy"]
+                return f"{value} ({ecg_types[int(value)] if 0 <= int(value) <= 2 else 'Unknown'})"
+            elif key == 'exang':
+                return "No" if value == 0 else "Yes"
+            elif key == 'slope':
+                slope_types = ["Upsloping", "Flat", "Downsloping"]
+                return f"{value} ({slope_types[int(value)] if 0 <= int(value) <= 2 else 'Unknown'})"
+            elif key == 'thal':
+                thal_types = ["Normal", "Fixed Defect", "Reversible Defect", "Unknown"]
+                return f"{value} ({thal_types[int(value)] if 0 <= int(value) <= 3 else 'Unknown'})"
+            else:
+                return str(value)
+        
+        # Create patient information table
+        table_data = [['Feature', 'Value']]
+        for key, value in user_data.items():
+            if key in feature_names:
+                formatted_value = format_value(key, value)
+                table_data.append([feature_names[key], formatted_value])
+        
+        # Create and style the table
+        table = Table(table_data, colWidths=[3*inch, 2.5*inch])
+        table.setStyle(TableStyle([
+            # Header styling
+            ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+            ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, 0), 12),
+            ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+            
+            # Data styling
+            ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
+            ('TEXTCOLOR', (0, 1), (-1, -1), colors.black),
+            ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
+            ('FONTSIZE', (0, 1), (-1, -1), 10),
+            ('GRID', (0, 0), (-1, -1), 1, colors.black),
+            ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+            ('LEFTPADDING', (0, 0), (-1, -1), 6),
+            ('RIGHTPADDING', (0, 0), (-1, -1), 6),
+        ]))
+        
+        story.append(table)
+        story.append(Spacer(1, 30))
+        
+        # Risk Assessment Section
+        story.append(Paragraph("Risk Assessment", styles['Heading2']))
+        story.append(Spacer(1, 12))
+        
+        if prediction == 1:
+            risk_explanation = """
+            Based on the provided health parameters, our machine learning model indicates a 
+            <b>HIGH RISK</b> for heart disease. This means that the combination of factors 
+            in your health profile shows patterns similar to patients who have been diagnosed 
+            with heart disease.
+            """
+        else:
+            risk_explanation = """
+            Based on the provided health parameters, our machine learning model indicates a 
+            <b>LOW RISK</b> for heart disease. This means that the combination of factors 
+            in your health profile shows patterns similar to patients without heart disease.
+            """
+        
+        story.append(Paragraph(risk_explanation, styles['Normal']))
+        story.append(Spacer(1, 20))
+        
+        # Recommendations Section
+        story.append(Paragraph("Health Recommendations", styles['Heading2']))
+        story.append(Spacer(1, 12))
+        
+        if prediction == 1:
+            recommendations = [
+                "🏥 <b>Immediate Action:</b> Consult with a cardiologist or healthcare provider as soon as possible",
+                "💊 <b>Medical Follow-up:</b> Follow all prescribed medications and treatment plans",
+                "🍎 <b>Diet:</b> Adopt a heart-healthy diet low in saturated fats, trans fats, and sodium",
+                "🏃 <b>Exercise:</b> Engage in regular, moderate exercise as approved by your doctor",
+                "📊 <b>Monitoring:</b> Monitor blood pressure, cholesterol, and blood sugar levels regularly",
+                "🚭 <b>Lifestyle:</b> Avoid smoking and limit alcohol consumption",
+                "😌 <b>Stress:</b> Practice stress management techniques like meditation or yoga",
+                "💤 <b>Sleep:</b> Maintain regular sleep patterns (7-9 hours per night)"
+            ]
+        else:
+            recommendations = [
+                "✅ <b>Maintain:</b> Continue your current healthy lifestyle practices",
+                "🏥 <b>Check-ups:</b> Schedule regular preventive check-ups with your healthcare provider",
+                "🥗 <b>Diet:</b> Maintain a balanced diet rich in fruits, vegetables, and whole grains",
+                "🏃 <b>Exercise:</b> Stay physically active with at least 150 minutes of moderate exercise weekly",
+                "📊 <b>Monitoring:</b> Monitor your health metrics periodically",
+                "🚭 <b>Prevention:</b> Continue avoiding risk factors like smoking and excessive alcohol",
+                "💤 <b>Sleep:</b> Maintain good sleep hygiene and regular sleep schedule",
+                "😌 <b>Stress:</b> Continue managing stress through healthy activities"
+            ]
+        
+        for rec in recommendations:
+            story.append(Paragraph(f"• {rec}", styles['Normal']))
+            story.append(Spacer(1, 6))
+        
+        story.append(Spacer(1, 30))
+        
+        # Important Notes Section
+        story.append(Paragraph("Important Notes", styles['Heading2']))
+        story.append(Spacer(1, 12))
+        
+        important_notes = [
+            "<b>Model Accuracy:</b> This prediction is based on machine learning analysis of health data patterns.",
+            "<b>Not a Diagnosis:</b> This tool does not provide medical diagnoses or replace professional medical advice.",
+            "<b>Individual Variation:</b> Health outcomes can vary significantly between individuals.",
+            "<b>Regular Updates:</b> Health status can change over time; regular medical check-ups are important."
         ]
-    else:
-        recommendations = [
-            "Continue maintaining a healthy lifestyle",
-            "Regular check-ups with your healthcare provider",
-            "Maintain a balanced diet rich in fruits and vegetables",
-            "Stay physically active with regular exercise",
-            "Monitor your health metrics periodically",
-            "Avoid risk factors like smoking and excessive alcohol"
-        ]
-    
-    for rec in recommendations:
-        story.append(Paragraph(f"• {rec}", styles['Normal']))
-    
-    # Disclaimer
-    story.append(Spacer(1, 30))
-    disclaimer_style = ParagraphStyle(
-        'Disclaimer',
-        parent=styles['Normal'],
-        fontSize=10,
-        textColor=colors.grey,
-        alignment=1
-    )
-    story.append(Paragraph(
-        "Disclaimer: This prediction is for informational purposes only and should not replace professional medical advice. "
-        "Please consult with a qualified healthcare provider for proper diagnosis and treatment.",
-        disclaimer_style
-    ))
-    
-    doc.build(story)
-    buffer.seek(0)
-    return buffer
+        
+        for note in important_notes:
+            story.append(Paragraph(f"• {note}", styles['Normal']))
+            story.append(Spacer(1, 6))
+        
+        story.append(Spacer(1, 40))
+        
+        # Medical Disclaimer
+        disclaimer_style = ParagraphStyle(
+            'Disclaimer',
+            parent=styles['Normal'],
+            fontSize=10,
+            textColor=colors.grey,
+            alignment=TA_CENTER,
+            spaceAfter=12
+        )
+        
+        disclaimer_text = """
+        <b>MEDICAL DISCLAIMER:</b> This prediction report is for informational and educational purposes only. 
+        It is not intended to be a substitute for professional medical advice, diagnosis, or treatment. 
+        Always seek the advice of your physician or other qualified health provider with any questions 
+        you may have regarding a medical condition. Never disregard professional medical advice or 
+        delay in seeking it because of something you have read in this report.
+        """
+        
+        story.append(Paragraph(disclaimer_text, disclaimer_style))
+        
+        # Footer
+        footer_style = ParagraphStyle(
+            'Footer',
+            parent=styles['Normal'],
+            fontSize=8,
+            textColor=colors.grey,
+            alignment=TA_CENTER
+        )
+        
+        story.append(Spacer(1, 20))
+        story.append(Paragraph("Generated by Heart Disease Prediction System", footer_style))
+        
+        # Build the PDF
+        doc.build(story)
+        buffer.seek(0)
+        return buffer
+        
+    except Exception as e:
+        st.error(f"Error generating PDF report: {str(e)}")
+        return None
 
 def main():
     """Main Streamlit app"""
@@ -454,13 +592,20 @@ def single_prediction_page(model, scaler):
         col1, col2 = st.columns(2)
         with col1:
             if st.button("📄 Generate PDF Report"):
-                pdf_buffer = generate_pdf_report(user_data, prediction, confidence)
-                st.download_button(
-                    label="📥 Download PDF Report",
-                    data=pdf_buffer.getvalue(),
-                    file_name=f"heart_disease_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf",
-                    mime="application/pdf"
-                )
+                with st.spinner("Generating PDF report..."):
+                    pdf_buffer = generate_pdf_report(user_data, prediction, confidence)
+                    
+                    if pdf_buffer is not None:
+                        st.download_button(
+                            label="📥 Download PDF Report",
+                            data=pdf_buffer.getvalue(),
+                            file_name=f"heart_disease_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf",
+                            mime="application/pdf",
+                            key="pdf_download"
+                        )
+                        st.success("✅ PDF report generated successfully!")
+                    else:
+                        st.error("❌ Failed to generate PDF report. Please try again.")
         
         with col2:
             st.success("✅ Prediction saved to log!")
