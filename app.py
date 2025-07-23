@@ -78,6 +78,129 @@ def create_directories():
     if not os.path.exists('logs'):
         os.makedirs('logs')
 
+def clean_uploaded_csv(df):
+    """
+    Clean uploaded CSV to match model expectations
+    Automatically handles target columns and missing features
+    """
+    # Expected feature columns (based on the training data)
+    expected_features = [
+        'age', 'sex', 'cp', 'trestbps', 'chol', 'fbs', 
+        'restecg', 'thalach', 'exang', 'oldpeak', 'slope', 'ca', 'thal'
+    ]
+    
+    # Remove target/condition columns if they exist
+    target_columns = ['target', 'condition', 'heart_disease', 'label', 'class', 'output', 'result']
+    removed_targets = []
+    
+    for col in target_columns:
+        if col in df.columns:
+            df = df.drop(col, axis=1)
+            removed_targets.append(col)
+    
+    if removed_targets:
+        st.success(f"✅ Automatically removed target column(s): {', '.join(removed_targets)}")
+        st.info("ℹ️ These columns were removed because they represent what we're trying to predict!")
+    
+    # Check if all expected features are present
+    missing_features = [col for col in expected_features if col not in df.columns]
+    if missing_features:
+        st.error(f"❌ Missing required columns: {', '.join(missing_features)}")
+        st.info("Please ensure your CSV contains these columns:")
+        
+        # Show expected columns in a nice format
+        col1, col2 = st.columns(2)
+        with col1:
+            st.write("**Required columns:**")
+            for i, col in enumerate(expected_features[:7]):
+                st.write(f"• {col}")
+        with col2:
+            st.write("**Continued:**")
+            for col in expected_features[7:]:
+                st.write(f"• {col}")
+        
+        return None
+    
+    # Remove any extra columns that aren't needed
+    extra_columns = [col for col in df.columns if col not in expected_features]
+    if extra_columns:
+        st.info(f"ℹ️ Removed extra columns: {', '.join(extra_columns)}")
+        st.write("These columns were not needed for prediction.")
+    
+    # Keep only the expected features in the correct order
+    df_cleaned = df[expected_features].copy()
+    
+    # Validate data types and ranges
+    validation_issues = validate_csv_data(df_cleaned)
+    
+    return df_cleaned
+
+def validate_csv_data(df):
+    """
+    Validate the CSV data for common issues
+    """
+    issues = []
+    
+    # Check for missing values
+    missing_values = df.isnull().sum()
+    if missing_values.sum() > 0:
+        st.warning("⚠️ Found missing values in the following columns:")
+        for col, count in missing_values[missing_values > 0].items():
+            st.write(f"• {col}: {count} missing values")
+        st.info("Missing values will be handled automatically during prediction.")
+        issues.append("missing_values")
+    
+    # Check data types for numeric columns
+    numeric_columns = ['age', 'trestbps', 'chol', 'thalach', 'oldpeak']
+    for col in numeric_columns:
+        if col in df.columns:
+            if not pd.api.types.is_numeric_dtype(df[col]):
+                st.warning(f"⚠️ Column '{col}' should be numeric but contains non-numeric values")
+                issues.append(f"non_numeric_{col}")
+    
+    # Check value ranges (basic validation)
+    if 'age' in df.columns:
+        age_issues = df[(df['age'] < 0) | (df['age'] > 120)]
+        if len(age_issues) > 0:
+            st.warning(f"⚠️ Found {len(age_issues)} rows with unusual age values (outside 0-120 range)")
+            issues.append("age_range")
+    
+    if 'trestbps' in df.columns:
+        bp_issues = df[(df['trestbps'] < 50) | (df['trestbps'] > 300)]
+        if len(bp_issues) > 0:
+            st.warning(f"⚠️ Found {len(bp_issues)} rows with unusual blood pressure values")
+            issues.append("bp_range")
+    
+    if 'chol' in df.columns:
+        chol_issues = df[(df['chol'] < 50) | (df['chol'] > 800)]
+        if len(chol_issues) > 0:
+            st.warning(f"⚠️ Found {len(chol_issues)} rows with unusual cholesterol values")
+            issues.append("chol_range")
+    
+    # Check categorical columns
+    categorical_ranges = {
+        'sex': [0, 1],
+        'cp': [0, 1, 2, 3],
+        'fbs': [0, 1],
+        'restecg': [0, 1, 2],
+        'exang': [0, 1],
+        'slope': [0, 1, 2],
+        'ca': [0, 1, 2, 3, 4],
+        'thal': [0, 1, 2, 3]
+    }
+    
+    for col, valid_values in categorical_ranges.items():
+        if col in df.columns:
+            invalid_values = df[~df[col].isin(valid_values)]
+            if len(invalid_values) > 0:
+                st.warning(f"⚠️ Column '{col}' contains invalid values. Expected: {valid_values}")
+                issues.append(f"invalid_{col}")
+    
+    if not issues:
+        st.success("✅ Data validation passed! Your CSV looks good.")
+    
+    return issues
+
 def save_prediction_log(user_data, prediction, probability):
     """Save prediction to CSV log"""
     log_file = 'logs/prediction_log.csv'
@@ -343,11 +466,29 @@ def single_prediction_page(model, scaler):
             st.success("✅ Prediction saved to log!")
 
 def batch_prediction_page(model, scaler):
-    """Batch prediction page"""
+    """Batch prediction page with automatic CSV cleaning"""
     st.markdown('<h2 class="sub-header">Batch Prediction</h2>', unsafe_allow_html=True)
     
-    st.info("Upload a CSV file with patient data for batch prediction. "
-           "The CSV should contain the same columns as the training data.")
+    st.info("📁 Upload a CSV file with patient data for batch prediction. "
+           "The app will automatically handle column formatting!")
+    
+    # Show expected format
+    with st.expander("📋 Click to see expected CSV format"):
+        st.write("Your CSV should contain these columns (in any order):")
+        expected_cols = [
+            'age', 'sex', 'cp', 'trestbps', 'chol', 'fbs', 
+            'restecg', 'thalach', 'exang', 'oldpeak', 'slope', 'ca', 'thal'
+        ]
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            for col in expected_cols[:7]:
+                st.write(f"• **{col}**")
+        with col2:
+            for col in expected_cols[7:]:
+                st.write(f"• **{col}**")
+        
+        st.write("**Note:** If your CSV contains target columns like 'condition', 'target', etc., they will be automatically removed.")
     
     uploaded_file = st.file_uploader("Choose a CSV file", type="csv")
     
@@ -355,44 +496,119 @@ def batch_prediction_page(model, scaler):
         try:
             # Load the data
             df = pd.read_csv(uploaded_file)
-            st.write("### Uploaded Data Preview")
-            st.dataframe(df.head())
             
-            if st.button("🔍 Run Batch Prediction"):
-                # Make predictions
-                input_scaled = scaler.transform(df)
-                predictions = model.predict(input_scaled)
-                probabilities = model.predict_proba(input_scaled)
-                confidences = np.max(probabilities, axis=1)
+            st.write("### 📊 Original Uploaded Data Preview")
+            st.dataframe(df.head())
+            st.write(f"**Original shape:** {df.shape[0]} rows, {df.shape[1]} columns")
+            
+            # Clean the data automatically
+            st.write("### 🧹 Data Cleaning Process")
+            df_cleaned = clean_uploaded_csv(df)
+            
+            if df_cleaned is not None:
+                st.write("### ✅ Cleaned Data Preview")
+                st.dataframe(df_cleaned.head())
+                st.write(f"**Cleaned shape:** {df_cleaned.shape[0]} rows, {df_cleaned.shape[1]} columns")
                 
-                # Add results to dataframe
-                df['prediction'] = predictions
-                df['risk_level'] = ['High Risk' if p == 1 else 'Low Risk' for p in predictions]
-                df['confidence'] = confidences
-                
-                st.write("### Prediction Results")
-                st.dataframe(df)
-                
-                # Summary statistics
-                col1, col2, col3 = st.columns(3)
-                with col1:
-                    st.metric("Total Patients", len(df))
-                with col2:
-                    st.metric("High Risk", int(sum(predictions)))
-                with col3:
-                    st.metric("Low Risk", int(len(predictions) - sum(predictions)))
-                
-                # Download results
-                csv = df.to_csv(index=False)
-                st.download_button(
-                    label="📥 Download Results CSV",
-                    data=csv,
-                    file_name=f"batch_predictions_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
-                    mime="text/csv"
-                )
-                
+                if st.button("🔍 Run Batch Prediction", type="primary"):
+                    with st.spinner("Making predictions..."):
+                        try:
+                            # Handle missing values if any
+                            if df_cleaned.isnull().sum().sum() > 0:
+                                st.info("🔧 Handling missing values with forward fill...")
+                                df_cleaned = df_cleaned.fillna(method='ffill').fillna(method='bfill')
+                            
+                            # Make predictions
+                            input_scaled = scaler.transform(df_cleaned)
+                            predictions = model.predict(input_scaled)
+                            probabilities = model.predict_proba(input_scaled)
+                            confidences = np.max(probabilities, axis=1)
+                            
+                            # Add results to dataframe
+                            results_df = df_cleaned.copy()
+                            results_df['prediction'] = predictions
+                            results_df['risk_level'] = ['High Risk' if p == 1 else 'Low Risk' for p in predictions]
+                            results_df['confidence'] = confidences
+                            results_df['confidence_percent'] = (confidences * 100).round(1)
+                            
+                            st.success("🎉 Predictions completed successfully!")
+                            
+                            # Summary statistics
+                            st.write("### 📈 Prediction Summary")
+                            col1, col2, col3, col4 = st.columns(4)
+                            with col1:
+                                st.metric("Total Patients", len(results_df))
+                            with col2:
+                                high_risk_count = int(sum(predictions))
+                                st.metric("High Risk", high_risk_count, 
+                                         delta=f"{high_risk_count/len(predictions)*100:.1f}%")
+                            with col3:
+                                low_risk_count = int(len(predictions) - sum(predictions))
+                                st.metric("Low Risk", low_risk_count,
+                                         delta=f"{low_risk_count/len(predictions)*100:.1f}%")
+                            with col4:
+                                avg_confidence = confidences.mean()
+                                st.metric("Avg Confidence", f"{avg_confidence:.2%}")
+                            
+                            # Show results
+                            st.write("### 📋 Detailed Prediction Results")
+                            
+                            # Display with risk level coloring
+                            def highlight_risk(row):
+                                if row['risk_level'] == 'High Risk':
+                                    return ['background-color: #ffebee'] * len(row)
+                                else:
+                                    return ['background-color: #e8f5e8'] * len(row)
+                            
+                            display_df = results_df[['age', 'sex', 'risk_level', 'confidence_percent']].copy()
+                            st.dataframe(
+                                display_df.style.apply(highlight_risk, axis=1),
+                                use_container_width=True
+                            )
+                            
+                            # Full results download
+                            st.write("### 📥 Download Results")
+                            col1, col2 = st.columns(2)
+                            
+                            with col1:
+                                # Download full results
+                                csv_full = results_df.to_csv(index=False)
+                                st.download_button(
+                                    label="📊 Download Full Results CSV",
+                                    data=csv_full,
+                                    file_name=f"batch_predictions_full_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+                                    mime="text/csv"
+                                )
+                            
+                            with col2:
+                                # Download summary only
+                                summary_df = results_df[['age', 'sex', 'risk_level', 'confidence_percent']].copy()
+                                csv_summary = summary_df.to_csv(index=False)
+                                st.download_button(
+                                    label="📋 Download Summary CSV",
+                                    data=csv_summary,
+                                    file_name=f"batch_predictions_summary_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+                                    mime="text/csv"
+                                )
+                            
+                            # Risk distribution chart
+                            st.write("### 📊 Risk Distribution")
+                            risk_counts = results_df['risk_level'].value_counts()
+                            
+                            fig, ax = plt.subplots(figsize=(8, 6))
+                            risk_counts.plot(kind='pie', ax=ax, autopct='%1.1f%%', 
+                                           colors=['lightcoral', 'lightgreen'])
+                            ax.set_ylabel('')
+                            ax.set_title('Risk Level Distribution')
+                            st.pyplot(fig)
+                            
+                        except Exception as e:
+                            st.error(f"❌ Error during batch prediction: {str(e)}")
+                            st.info("Please check your data format and try again.")
+            
         except Exception as e:
-            st.error(f"Error processing file: {str(e)}")
+            st.error(f"❌ Error reading file: {str(e)}")
+            st.info("Please make sure your file is a valid CSV format.")
 
 def data_visualization_page():
     """Data visualization page"""
