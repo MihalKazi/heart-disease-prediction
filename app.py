@@ -21,6 +21,10 @@ from reportlab.lib.units import inch
 from reportlab.lib import colors
 from reportlab.lib.enums import TA_CENTER, TA_LEFT
 
+# Safety threshold configuration - TOUGHER THRESHOLD FOR MEDICAL SAFETY
+SAFETY_THRESHOLD = 0.3  # Lower = more conservative (more likely to predict high risk)
+# 0.5 = default, 0.3 = conservative, 0.2 = very conservative, 0.1 = extremely conservative
+
 # Set page config
 st.set_page_config(
     page_title="Heart Disease Prediction",
@@ -58,6 +62,13 @@ st.markdown("""
     }
     .feature-importance {
         background-color: #f8f9fa;
+        padding: 1rem;
+        border-radius: 5px;
+        margin: 1rem 0;
+    }
+    .safety-info {
+        background-color: #fff3cd;
+        border: 1px solid #ffeaa7;
         padding: 1rem;
         border-radius: 5px;
         margin: 1rem 0;
@@ -212,6 +223,8 @@ def save_prediction_log(user_data, prediction, probability):
     log_data = user_data.copy()
     log_data['prediction'] = prediction
     log_data['probability'] = probability
+    log_data['risk_score'] = probability if prediction == 1 else (1 - probability)
+    log_data['threshold_used'] = SAFETY_THRESHOLD
     log_data['timestamp'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     
     # Convert to DataFrame
@@ -273,7 +286,8 @@ def generate_pdf_report(user_data, prediction, probability, feature_importance=N
         # Report metadata
         current_time = datetime.now().strftime("%B %d, %Y at %I:%M %p")
         story.append(Paragraph(f"<b>Report Generated:</b> {current_time}", styles['Normal']))
-        story.append(Paragraph(f"<b>Model Used:</b> Machine Learning Classifier", styles['Normal']))
+        story.append(Paragraph(f"<b>Model Used:</b> Machine Learning Classifier (Conservative Mode)", styles['Normal']))
+        story.append(Paragraph(f"<b>Safety Threshold:</b> {SAFETY_THRESHOLD:.1%} (Enhanced Safety)", styles['Normal']))
         story.append(Spacer(1, 30))
         
         # Prediction Result
@@ -289,6 +303,15 @@ def generate_pdf_report(user_data, prediction, probability, feature_importance=N
         
         story.append(Paragraph(f"<b>Prediction Result: {result_text}</b>", result_style_colored))
         story.append(Paragraph(f"<b>Confidence Level: {probability:.1%}</b>", result_style_colored))
+        story.append(Spacer(1, 30))
+        
+        # Safety Information
+        safety_info = f"""
+        <b>Conservative Analysis:</b> This prediction uses a safety threshold of {SAFETY_THRESHOLD:.1%} 
+        instead of the standard 50%, making it more likely to identify potential heart disease risk. 
+        This approach prioritizes patient safety by reducing the chance of missing a serious condition.
+        """
+        story.append(Paragraph(safety_info, styles['Normal']))
         story.append(Spacer(1, 30))
         
         # Patient Information Section
@@ -372,17 +395,18 @@ def generate_pdf_report(user_data, prediction, probability, feature_importance=N
         story.append(Spacer(1, 12))
         
         if prediction == 1:
-            risk_explanation = """
-            Based on the provided health parameters, our machine learning model indicates a 
-            <b>HIGH RISK</b> for heart disease. This means that the combination of factors 
-            in your health profile shows patterns similar to patients who have been diagnosed 
-            with heart disease.
+            risk_explanation = f"""
+            Based on the provided health parameters, our conservative machine learning model indicates a 
+            <b>HIGH RISK</b> for heart disease. Using a safety threshold of {SAFETY_THRESHOLD:.1%}, this means 
+            that the combination of factors in your health profile shows patterns that warrant immediate 
+            medical attention and further evaluation.
             """
         else:
-            risk_explanation = """
-            Based on the provided health parameters, our machine learning model indicates a 
-            <b>LOW RISK</b> for heart disease. This means that the combination of factors 
-            in your health profile shows patterns similar to patients without heart disease.
+            risk_explanation = f"""
+            Based on the provided health parameters, our conservative machine learning model indicates a 
+            <b>LOW RISK</b> for heart disease. Even with our enhanced safety threshold of {SAFETY_THRESHOLD:.1%}, 
+            your health profile shows patterns similar to patients without heart disease. However, 
+            continue regular health maintenance and monitoring.
             """
         
         story.append(Paragraph(risk_explanation, styles['Normal']))
@@ -394,14 +418,15 @@ def generate_pdf_report(user_data, prediction, probability, feature_importance=N
         
         if prediction == 1:
             recommendations = [
-                "🏥 <b>Immediate Action:</b> Consult with a cardiologist or healthcare provider as soon as possible",
-                "💊 <b>Medical Follow-up:</b> Follow all prescribed medications and treatment plans",
+                "🏥 <b>URGENT:</b> Schedule an appointment with a cardiologist or healthcare provider immediately",
+                "💊 <b>Medical Care:</b> Follow all prescribed medications and treatment plans strictly",
                 "🍎 <b>Diet:</b> Adopt a heart-healthy diet low in saturated fats, trans fats, and sodium",
                 "🏃 <b>Exercise:</b> Engage in regular, moderate exercise as approved by your doctor",
                 "📊 <b>Monitoring:</b> Monitor blood pressure, cholesterol, and blood sugar levels regularly",
-                "🚭 <b>Lifestyle:</b> Avoid smoking and limit alcohol consumption",
+                "🚭 <b>Lifestyle:</b> Avoid smoking and limit alcohol consumption immediately",
                 "😌 <b>Stress:</b> Practice stress management techniques like meditation or yoga",
-                "💤 <b>Sleep:</b> Maintain regular sleep patterns (7-9 hours per night)"
+                "💤 <b>Sleep:</b> Maintain regular sleep patterns (7-9 hours per night)",
+                "🔄 <b>Follow-up:</b> Schedule regular check-ups and follow-up tests as recommended"
             ]
         else:
             recommendations = [
@@ -412,7 +437,8 @@ def generate_pdf_report(user_data, prediction, probability, feature_importance=N
                 "📊 <b>Monitoring:</b> Monitor your health metrics periodically",
                 "🚭 <b>Prevention:</b> Continue avoiding risk factors like smoking and excessive alcohol",
                 "💤 <b>Sleep:</b> Maintain good sleep hygiene and regular sleep schedule",
-                "😌 <b>Stress:</b> Continue managing stress through healthy activities"
+                "😌 <b>Stress:</b> Continue managing stress through healthy activities",
+                "⚠️ <b>Vigilance:</b> Remain alert to any changes in your health status"
             ]
         
         for rec in recommendations:
@@ -426,10 +452,11 @@ def generate_pdf_report(user_data, prediction, probability, feature_importance=N
         story.append(Spacer(1, 12))
         
         important_notes = [
-            "<b>Model Accuracy:</b> This prediction is based on machine learning analysis of health data patterns.",
+            f"<b>Conservative Analysis:</b> This uses a {SAFETY_THRESHOLD:.1%} threshold for enhanced patient safety.",
+            "<b>Model Accuracy:</b> Based on machine learning analysis of health data patterns.",
             "<b>Not a Diagnosis:</b> This tool does not provide medical diagnoses or replace professional medical advice.",
             "<b>Individual Variation:</b> Health outcomes can vary significantly between individuals.",
-            "<b>Regular Updates:</b> Health status can change over time; regular medical check-ups are important."
+            "<b>Regular Updates:</b> Health status can change; regular medical check-ups are essential."
         ]
         
         for note in important_notes:
@@ -468,7 +495,7 @@ def generate_pdf_report(user_data, prediction, probability, feature_importance=N
         )
         
         story.append(Spacer(1, 20))
-        story.append(Paragraph("Generated by Heart Disease Prediction System", footer_style))
+        story.append(Paragraph("Generated by Heart Disease Prediction System - Conservative Mode", footer_style))
         
         # Build the PDF
         doc.build(story)
@@ -487,6 +514,17 @@ def main():
     
     # Header
     st.markdown('<h1 class="main-header">❤️ Heart Disease Prediction</h1>', unsafe_allow_html=True)
+    
+    # Safety threshold information
+    st.markdown(f"""
+    <div class="safety-info">
+        <h4>🛡️ Enhanced Safety Mode Active</h4>
+        <p><strong>Threshold:</strong> {SAFETY_THRESHOLD:.1%} (More conservative than standard 50%)</p>
+        <p><strong>Impact:</strong> Higher sensitivity - more likely to identify potential heart disease risk</p>
+        <p><strong>Purpose:</strong> Prioritizes patient safety by reducing false negatives</p>
+    </div>
+    """, unsafe_allow_html=True)
+    
     st.markdown("---")
     
     # Load model
@@ -501,6 +539,13 @@ def main():
     page = st.sidebar.selectbox("Choose a page", 
                                ["Single Prediction", "Batch Prediction", "Data Visualization", "Prediction History"])
     
+    # Safety information in sidebar
+    st.sidebar.markdown("---")
+    st.sidebar.subheader("🛡️ Safety Settings")
+    st.sidebar.info(f"**Threshold:** {SAFETY_THRESHOLD:.1%}")
+    st.sidebar.write("🔒 **Conservative Mode:** Lower threshold means more patients will be flagged as high-risk for safety.")
+    st.sidebar.write("📊 **Impact:** More false positives, fewer false negatives")
+    
     if page == "Single Prediction":
         single_prediction_page(model, scaler)
     elif page == "Batch Prediction":
@@ -511,104 +556,184 @@ def main():
         prediction_history_page()
 
 def single_prediction_page(model, scaler):
-    """Single prediction page"""
+    """Single prediction page with session state to prevent refresh issues"""
     st.markdown('<h2 class="sub-header">Single Patient Prediction</h2>', unsafe_allow_html=True)
+    
+    # Initialize session state for prediction results
+    if 'prediction_made' not in st.session_state:
+        st.session_state.prediction_made = False
+    if 'last_prediction_data' not in st.session_state:
+        st.session_state.last_prediction_data = None
     
     col1, col2 = st.columns(2)
     
     with col1:
         st.subheader("Personal Information")
-        age = st.slider("Age", 20, 100, 50)
-        sex = st.selectbox("Sex", [0, 1], format_func=lambda x: "Female" if x == 0 else "Male")
+        age = st.slider("Age", 20, 100, 50, key="age_slider")
+        sex = st.selectbox("Sex", [0, 1], format_func=lambda x: "Female" if x == 0 else "Male", key="sex_select")
         
         st.subheader("Chest Pain & Heart Rate")
         cp = st.selectbox("Chest Pain Type", [0, 1, 2, 3], 
-                         format_func=lambda x: ["Typical Angina", "Atypical Angina", "Non-anginal Pain", "Asymptomatic"][x])
-        thalach = st.slider("Maximum Heart Rate Achieved", 60, 220, 150)
+                         format_func=lambda x: ["Typical Angina", "Atypical Angina", "Non-anginal Pain", "Asymptomatic"][x],
+                         key="cp_select")
+        thalach = st.slider("Maximum Heart Rate Achieved", 60, 220, 150, key="thalach_slider")
         exang = st.selectbox("Exercise Induced Angina", [0, 1], 
-                           format_func=lambda x: "No" if x == 0 else "Yes")
+                           format_func=lambda x: "No" if x == 0 else "Yes", key="exang_select")
         
         st.subheader("Blood Pressure & Blood Sugar")
-        trestbps = st.slider("Resting Blood Pressure (mm Hg)", 80, 200, 120)
+        trestbps = st.slider("Resting Blood Pressure (mm Hg)", 80, 200, 120, key="trestbps_slider")
         fbs = st.selectbox("Fasting Blood Sugar > 120 mg/dl", [0, 1], 
-                          format_func=lambda x: "No" if x == 0 else "Yes")
+                          format_func=lambda x: "No" if x == 0 else "Yes", key="fbs_select")
     
     with col2:
         st.subheader("Cholesterol & ECG")
-        chol = st.slider("Cholesterol (mg/dl)", 100, 600, 240)
+        chol = st.slider("Cholesterol (mg/dl)", 100, 600, 240, key="chol_slider")
         restecg = st.selectbox("Resting ECG Results", [0, 1, 2], 
-                              format_func=lambda x: ["Normal", "ST-T Wave Abnormality", "LV Hypertrophy"][x])
+                              format_func=lambda x: ["Normal", "ST-T Wave Abnormality", "LV Hypertrophy"][x],
+                              key="restecg_select")
         
         st.subheader("Exercise Test Results")
-        oldpeak = st.slider("ST Depression Induced by Exercise", 0.0, 6.0, 1.0, 0.1)
+        oldpeak = st.slider("ST Depression Induced by Exercise", 0.0, 6.0, 1.0, 0.1, key="oldpeak_slider")
         slope = st.selectbox("Slope of Peak Exercise ST Segment", [0, 1, 2], 
-                           format_func=lambda x: ["Upsloping", "Flat", "Downsloping"][x])
+                           format_func=lambda x: ["Upsloping", "Flat", "Downsloping"][x],
+                           key="slope_select")
         
         st.subheader("Advanced Measurements")
-        ca = st.selectbox("Number of Major Vessels Colored by Fluoroscopy", [0, 1, 2, 3, 4])
+        ca = st.selectbox("Number of Major Vessels Colored by Fluoroscopy", [0, 1, 2, 3, 4], key="ca_select")
         thal = st.selectbox("Thalassemia", [0, 1, 2, 3], 
-                          format_func=lambda x: ["Normal", "Fixed Defect", "Reversible Defect", "Unknown"][x])
+                          format_func=lambda x: ["Normal", "Fixed Defect", "Reversible Defect", "Unknown"][x],
+                          key="thal_select")
+    
+    # Current input data
+    current_user_data = {
+        'age': age, 'sex': sex, 'cp': cp, 'trestbps': trestbps,
+        'chol': chol, 'fbs': fbs, 'restecg': restecg, 'thalach': thalach,
+        'exang': exang, 'oldpeak': oldpeak, 'slope': slope, 'ca': ca, 'thal': thal
+    }
+    
+    # Check if input has changed (reset prediction state if so)
+    if (st.session_state.last_prediction_data is not None and 
+        current_user_data != st.session_state.last_prediction_data.get('user_data', {})):
+        st.session_state.prediction_made = False
+        st.session_state.last_prediction_data = None
     
     # Prediction button
-    if st.button("🔍 Predict Heart Disease Risk", type="primary"):
-        # Prepare input data
-        user_data = {
-            'age': age, 'sex': sex, 'cp': cp, 'trestbps': trestbps,
-            'chol': chol, 'fbs': fbs, 'restecg': restecg, 'thalach': thalach,
-            'exang': exang, 'oldpeak': oldpeak, 'slope': slope, 'ca': ca, 'thal': thal
-        }
-        
+    if st.button("🔍 Predict Heart Disease Risk", type="primary", key="predict_button"):
         # Create DataFrame and scale
-        input_df = pd.DataFrame([user_data])
+        input_df = pd.DataFrame([current_user_data])
         input_scaled = scaler.transform(input_df)
         
-        # Make prediction
-        prediction = model.predict(input_scaled)[0]
+        # MODIFIED: Make prediction with custom threshold
         probability = model.predict_proba(input_scaled)[0]
         confidence = max(probability)
+        
+        # Apply custom safety threshold (tougher)
+        prediction = 1 if probability[1] > SAFETY_THRESHOLD else 0
+        
+        # Store prediction results in session state
+        st.session_state.prediction_made = True
+        st.session_state.last_prediction_data = {
+            'user_data': current_user_data.copy(),
+            'prediction': prediction,
+            'probability': probability,
+            'confidence': confidence
+        }
+        
+        # Save to log
+        save_prediction_log(current_user_data, prediction, confidence)
+    
+    # Display results if prediction has been made
+    if st.session_state.prediction_made and st.session_state.last_prediction_data:
+        prediction_data = st.session_state.last_prediction_data
+        prediction = prediction_data['prediction']
+        probability = prediction_data['probability']
+        confidence = prediction_data['confidence']
+        user_data = prediction_data['user_data']
         
         # Display results
         if prediction == 1:
             st.markdown(f"""
             <div class="prediction-box high-risk">
                 <h3>⚠️ HIGH RISK of Heart Disease</h3>
+                <p><strong>Risk Score:</strong> {probability[1]:.2%}</p>
                 <p><strong>Confidence:</strong> {confidence:.2%}</p>
-                <p>Please consult with a healthcare professional immediately.</p>
+                <p><strong>Safety Threshold:</strong> {SAFETY_THRESHOLD:.1%} (Conservative)</p>
+                <p><strong>⚕️ Please consult with a healthcare professional immediately.</strong></p>
             </div>
             """, unsafe_allow_html=True)
         else:
             st.markdown(f"""
             <div class="prediction-box low-risk">
                 <h3>✅ LOW RISK of Heart Disease</h3>
+                <p><strong>Risk Score:</strong> {probability[1]:.2%}</p>
                 <p><strong>Confidence:</strong> {confidence:.2%}</p>
-                <p>Continue maintaining a healthy lifestyle!</p>
+                <p><strong>Safety Threshold:</strong> {SAFETY_THRESHOLD:.1%} (Conservative)</p>
+                <p><strong>Continue maintaining a healthy lifestyle!</strong></p>
             </div>
             """, unsafe_allow_html=True)
         
-        # Save to log
-        save_prediction_log(user_data, prediction, confidence)
+        # Additional risk interpretation
+        if probability[1] > 0.7:
+            risk_level = "Very High"
+            risk_color = "🔴"
+        elif probability[1] > 0.5:
+            risk_level = "High"
+            risk_color = "🟠"
+        elif probability[1] > 0.3:
+            risk_level = "Moderate"
+            risk_color = "🟡"
+        else:
+            risk_level = "Low"
+            risk_color = "🟢"
         
-        # Generate and offer PDF download
-        col1, col2 = st.columns(2)
+        st.info(f"{risk_color} **Risk Level:** {risk_level} | **Raw Score:** {probability[1]:.3f}")
+        
+        # Action buttons section
+        st.markdown("---")
+        st.subheader("📋 Generate Report")
+        
+        col1, col2, col3 = st.columns(3)
+        
         with col1:
-            if st.button("📄 Generate PDF Report"):
+            # Generate PDF Report button (now won't refresh)
+            if st.button("📄 Generate PDF Report", key="generate_pdf_button"):
                 with st.spinner("Generating PDF report..."):
                     pdf_buffer = generate_pdf_report(user_data, prediction, confidence)
                     
                     if pdf_buffer is not None:
-                        st.download_button(
-                            label="📥 Download PDF Report",
-                            data=pdf_buffer.getvalue(),
-                            file_name=f"heart_disease_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf",
-                            mime="application/pdf",
-                            key="pdf_download"
-                        )
+                        # Store PDF in session state for download
+                        st.session_state.pdf_data = pdf_buffer.getvalue()
+                        st.session_state.pdf_ready = True
                         st.success("✅ PDF report generated successfully!")
                     else:
                         st.error("❌ Failed to generate PDF report. Please try again.")
         
         with col2:
-            st.success("✅ Prediction saved to log!")
+            # Download PDF button (appears after generation)
+            if st.session_state.get('pdf_ready', False):
+                st.download_button(
+                    label="📥 Download PDF Report",
+                    data=st.session_state.pdf_data,
+                    file_name=f"heart_disease_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf",
+                    mime="application/pdf",
+                    key="pdf_download_button"
+                )
+        
+        with col3:
+            # Reset prediction button
+            if st.button("🔄 New Prediction", key="reset_button"):
+                st.session_state.prediction_made = False
+                st.session_state.last_prediction_data = None
+                st.session_state.pdf_ready = False
+                if 'pdf_data' in st.session_state:
+                    del st.session_state.pdf_data
+                st.rerun()
+        
+        st.success("✅ Prediction saved to log!")
+        
+        # Show input summary
+        with st.expander("📊 Input Summary", expanded=False):
+            st.json(user_data)
 
 def batch_prediction_page(model, scaler):
     """Batch prediction page with automatic CSV cleaning"""
@@ -663,10 +788,12 @@ def batch_prediction_page(model, scaler):
                                 st.info("🔧 Handling missing values with forward fill...")
                                 df_cleaned = df_cleaned.fillna(method='ffill').fillna(method='bfill')
                             
-                            # Make predictions
+                            # MODIFIED: Make predictions with custom threshold
                             input_scaled = scaler.transform(df_cleaned)
-                            predictions = model.predict(input_scaled)
                             probabilities = model.predict_proba(input_scaled)
+                            
+                            # Apply custom safety threshold (tougher)
+                            predictions = (probabilities[:, 1] > SAFETY_THRESHOLD).astype(int)
                             confidences = np.max(probabilities, axis=1)
                             
                             # Add results to dataframe
@@ -675,7 +802,11 @@ def batch_prediction_page(model, scaler):
                             results_df['risk_level'] = ['High Risk' if p == 1 else 'Low Risk' for p in predictions]
                             results_df['confidence'] = confidences
                             results_df['confidence_percent'] = (confidences * 100).round(1)
+                            results_df['risk_score'] = (probabilities[:, 1] * 100).round(1)  # Add risk score
+                            results_df['threshold_used'] = SAFETY_THRESHOLD
                             
+                            # Display threshold info
+                            st.info(f"🛡️ **Safety Threshold Used:** {SAFETY_THRESHOLD:.1%} (Conservative Mode)")
                             st.success("🎉 Predictions completed successfully!")
                             
                             # Summary statistics
@@ -705,7 +836,7 @@ def batch_prediction_page(model, scaler):
                                 else:
                                     return ['background-color: #e8f5e8'] * len(row)
                             
-                            display_df = results_df[['age', 'sex', 'risk_level', 'confidence_percent']].copy()
+                            display_df = results_df[['age', 'sex', 'risk_level', 'risk_score', 'confidence_percent']].copy()
                             st.dataframe(
                                 display_df.style.apply(highlight_risk, axis=1),
                                 use_container_width=True
@@ -727,7 +858,7 @@ def batch_prediction_page(model, scaler):
                             
                             with col2:
                                 # Download summary only
-                                summary_df = results_df[['age', 'sex', 'risk_level', 'confidence_percent']].copy()
+                                summary_df = results_df[['age', 'sex', 'risk_level', 'risk_score', 'confidence_percent']].copy()
                                 csv_summary = summary_df.to_csv(index=False)
                                 st.download_button(
                                     label="📋 Download Summary CSV",
@@ -744,7 +875,19 @@ def batch_prediction_page(model, scaler):
                             risk_counts.plot(kind='pie', ax=ax, autopct='%1.1f%%', 
                                            colors=['lightcoral', 'lightgreen'])
                             ax.set_ylabel('')
-                            ax.set_title('Risk Level Distribution')
+                            ax.set_title(f'Risk Level Distribution (Threshold: {SAFETY_THRESHOLD:.1%})')
+                            st.pyplot(fig)
+                            
+                            # Risk score distribution
+                            st.write("### 📈 Risk Score Distribution")
+                            fig, ax = plt.subplots(figsize=(10, 6))
+                            ax.hist(probabilities[:, 1], bins=30, alpha=0.7, color='skyblue', edgecolor='black')
+                            ax.axvline(x=SAFETY_THRESHOLD, color='red', linestyle='--', linewidth=2, 
+                                      label=f'Safety Threshold ({SAFETY_THRESHOLD:.1%})')
+                            ax.set_xlabel('Risk Score')
+                            ax.set_ylabel('Frequency')
+                            ax.set_title('Distribution of Risk Scores')
+                            ax.legend()
                             st.pyplot(fig)
                             
                         except Exception as e:
@@ -842,24 +985,28 @@ def data_visualization_page():
         st.error("Dataset not found. Please run model_training.py first to generate the dataset.")
 
 def prediction_history_page():
-    st.title("📊 Prediction History")
+    """Prediction history page with fixed clear functionality"""
+    st.markdown('<h2 class="sub-header">📊 Prediction History</h2>', unsafe_allow_html=True)
     
     # Load prediction history
-    if os.path.exists('logs/prediction_log.csv'):
-        df = pd.read_csv('logs/prediction_log.csv')
+    log_file = 'logs/prediction_log.csv'
+    
+    if os.path.exists(log_file):
+        df = pd.read_csv(log_file)
         
         if not df.empty:
             # Transform categorical values for better display
             df_display = df.copy()
             
             # Transform sex column
-            df_display['sex'] = df_display['sex'].map({0: 'Female', 1: 'Male'})
+            if 'sex' in df_display.columns:
+                df_display['sex'] = df_display['sex'].map({0: 'Female', 1: 'Male'})
             
             # Transform target/prediction column (if it exists)
             if 'target' in df_display.columns:
                 df_display['target'] = df_display['target'].map({0: 'No Heart Disease', 1: 'Heart Disease'})
             if 'prediction' in df_display.columns:
-                df_display['prediction'] = df_display['prediction'].map({0: 'No Heart Disease', 1: 'Heart Disease'})
+                df_display['prediction'] = df_display['prediction'].map({0: 'Low Risk', 1: 'High Risk'})
             
             # Transform other categorical columns if they exist
             if 'cp' in df_display.columns:
@@ -884,75 +1031,154 @@ def prediction_history_page():
                 thal_map = {0: 'Normal', 1: 'Fixed Defect', 2: 'Reversible Defect', 3: 'Unknown'}
                 df_display['thal'] = df_display['thal'].map(thal_map)
             
-            # Display the dataframe with proper column configuration
-            st.dataframe(
-                df_display,
-                column_config={
-                    'sex': st.column_config.TextColumn('Gender'),
-                    'target': st.column_config.TextColumn('Target') if 'target' in df_display.columns else None,
-                    'prediction': st.column_config.TextColumn('Prediction') if 'prediction' in df_display.columns else None,
-                    'cp': st.column_config.TextColumn('Chest Pain Type') if 'cp' in df_display.columns else None,
-                    'fbs': st.column_config.TextColumn('Fasting Blood Sugar > 120') if 'fbs' in df_display.columns else None,
-                    'exang': st.column_config.TextColumn('Exercise Induced Angina') if 'exang' in df_display.columns else None,
-                    'restecg': st.column_config.TextColumn('Resting ECG') if 'restecg' in df_display.columns else None,
-                    'slope': st.column_config.TextColumn('ST Slope') if 'slope' in df_display.columns else None,
-                    'thal': st.column_config.TextColumn('Thalassemia') if 'thal' in df_display.columns else None,
-                    'age': st.column_config.NumberColumn('Age'),
-                    'trestbps': st.column_config.NumberColumn('Resting BP'),
-                    'chol': st.column_config.NumberColumn('Cholesterol'),
-                    'thalach': st.column_config.NumberColumn('Max Heart Rate'),
-                    'oldpeak': st.column_config.NumberColumn('ST Depression'),
-                    'ca': st.column_config.NumberColumn('Major Vessels'),
-                    'timestamp': st.column_config.DatetimeColumn('Timestamp') if 'timestamp' in df_display.columns else None,
-                },
-                use_container_width=True
-            )
-            
-            # Add download button
-            csv = df_display.to_csv(index=False)
-            st.download_button(
-                label="📥 Download Prediction History",
-                data=csv,
-                file_name="prediction_history.csv",
-                mime="text/csv"
-            )
-            
-            # Show summary statistics
-            st.subheader("📈 Summary Statistics")
-            col1, col2, col3 = st.columns(3)
+            # Show summary first
+            st.write("### 📈 Summary Statistics")
+            col1, col2, col3, col4 = st.columns(4)
             
             with col1:
                 st.metric("Total Predictions", len(df_display))
             
             with col2:
                 if 'prediction' in df_display.columns:
-                    heart_disease_count = len(df_display[df_display['prediction'] == 'Heart Disease'])
-                    st.metric("Heart Disease Predictions", heart_disease_count)
+                    heart_disease_count = len(df_display[df_display['prediction'] == 'High Risk'])
+                    st.metric("High Risk Predictions", heart_disease_count)
                 elif 'target' in df_display.columns:
                     heart_disease_count = len(df_display[df_display['target'] == 'Heart Disease'])
                     st.metric("Heart Disease Cases", heart_disease_count)
             
             with col3:
                 if 'prediction' in df_display.columns:
-                    no_disease_count = len(df_display[df_display['prediction'] == 'No Heart Disease'])
-                    st.metric("No Heart Disease Predictions", no_disease_count)
+                    no_disease_count = len(df_display[df_display['prediction'] == 'Low Risk'])
+                    st.metric("Low Risk Predictions", no_disease_count)
                 elif 'target' in df_display.columns:
                     no_disease_count = len(df_display[df_display['target'] == 'No Heart Disease'])
                     st.metric("No Heart Disease Cases", no_disease_count)
+            
+            with col4:
+                if 'threshold_used' in df_display.columns:
+                    threshold_used = df_display['threshold_used'].iloc[0] if not df_display['threshold_used'].empty else SAFETY_THRESHOLD
+                    st.metric("Safety Threshold", f"{threshold_used:.1%}")
+                else:
+                    st.metric("Safety Threshold", f"{SAFETY_THRESHOLD:.1%}")
+            
+            # Display the dataframe with proper column configuration
+            st.write("### 📋 Prediction Records")
+            
+            # Select most relevant columns for display
+            display_columns = ['timestamp', 'age', 'sex', 'prediction', 'risk_score', 'probability', 'threshold_used']
+            available_columns = [col for col in display_columns if col in df_display.columns]
+            
+            if available_columns:
+                st.dataframe(
+                    df_display[available_columns],
+                    column_config={
+                        'timestamp': st.column_config.DatetimeColumn('Timestamp'),
+                        'age': st.column_config.NumberColumn('Age'),
+                        'sex': st.column_config.TextColumn('Gender'),
+                        'prediction': st.column_config.TextColumn('Prediction'),
+                        'risk_score': st.column_config.NumberColumn('Risk Score'),
+                        'probability': st.column_config.NumberColumn('Confidence'),
+                        'threshold_used': st.column_config.NumberColumn('Threshold'),
+                    },
+                    use_container_width=True
+                )
+            else:
+                st.dataframe(df_display, use_container_width=True)
+            
+            # Action buttons
+            st.write("### 🔧 Actions")
+            col1, col2, col3 = st.columns(3)
+            
+            with col1:
+                # Download button
+                csv = df_display.to_csv(index=False)
+                st.download_button(
+                    label="📥 Download History",
+                    data=csv,
+                    file_name=f"prediction_history_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+                    mime="text/csv"
+                )
+            
+            with col2:
+                # Clear history button with confirmation
+                if st.button("🗑️ Clear History", type="secondary"):
+                    st.session_state.show_clear_confirm = True
+            
+            with col3:
+                # Show full details toggle
+                if st.button("📊 Show Full Details"):
+                    with st.expander("Full Prediction History", expanded=True):
+                        st.dataframe(df_display, use_container_width=True)
+            
+            # Clear confirmation dialog
+            if st.session_state.get('show_clear_confirm', False):
+                st.warning("⚠️ Are you sure you want to clear all prediction history? This action cannot be undone.")
+                
+                col1, col2 = st.columns(2)
+                with col1:
+                    if st.button("✅ Yes, Clear History", type="primary"):
+                        try:
+                            if os.path.exists(log_file):
+                                os.remove(log_file)
+                                st.success("🗑️ Prediction history cleared successfully!")
+                                st.session_state.show_clear_confirm = False
+                                st.rerun()
+                            else:
+                                st.error("History file not found.")
+                        except Exception as e:
+                            st.error(f"Error clearing history: {str(e)}")
+                
+                with col2:
+                    if st.button("❌ Cancel"):
+                        st.session_state.show_clear_confirm = False
+                        st.rerun()
+            
+            # Prediction trends visualization
+            if 'timestamp' in df_display.columns and len(df_display) > 1:
+                st.write("### 📈 Prediction Trends")
+                
+                # Convert timestamp to datetime
+                df_display['timestamp'] = pd.to_datetime(df_display['timestamp'])
+                
+                # Daily prediction counts
+                daily_predictions = df_display.groupby([df_display['timestamp'].dt.date, 'prediction']).size().unstack(fill_value=0)
+                
+                if not daily_predictions.empty:
+                    fig, ax = plt.subplots(figsize=(12, 6))
+                    daily_predictions.plot(kind='bar', ax=ax, color=['lightgreen', 'lightcoral'])
+                    ax.set_title('Daily Prediction Trends')
+                    ax.set_xlabel('Date')
+                    ax.set_ylabel('Number of Predictions')
+                    ax.legend(title='Risk Level')
+                    plt.xticks(rotation=45)
+                    st.pyplot(fig)
         
         else:
-            st.info("No prediction history available.")
+            st.info("📝 No prediction history available yet.")
+            st.write("Make some predictions first to see the history here!")
     
     else:
-        st.info("No prediction history file found. Make some predictions first!")
+        st.info("📁 No prediction history file found.")
+        st.write("Make some predictions first to create the history log!")
+    
+    # Instructions
+    with st.expander("ℹ️ About Prediction History"):
+        st.write("""
+        **What's stored:**
+        - All individual predictions with timestamps
+        - Patient parameters used for each prediction
+        - Risk scores and confidence levels
+        - Safety threshold used for each prediction
         
-    # Add a button to clear history
-    if st.button("🗑️ Clear History", type="secondary"):
-        if st.button("⚠️ Confirm Clear History"):
-            if os.path.exists('logs/prediction_log.csv'):
-                os.remove('logs/prediction_log.csv')
-                st.success("Prediction history cleared!")
-                st.experimental_rerun()
+        **Features:**
+        - Download complete history as CSV
+        - View prediction trends over time
+        - Clear history with confirmation
+        - Detailed prediction analytics
+        
+        **Privacy Note:** 
+        All data is stored locally on your system and not shared externally.
+        """)
 
 if __name__ == "__main__":
     main()
