@@ -842,90 +842,117 @@ def data_visualization_page():
         st.error("Dataset not found. Please run model_training.py first to generate the dataset.")
 
 def prediction_history_page():
-    """Prediction history page"""
-    st.markdown('<h2 class="sub-header">Prediction History</h2>', unsafe_allow_html=True)
+    st.title("📊 Prediction History")
     
-    log_file = 'logs/prediction_log.csv'
-    
-    if os.path.exists(log_file):
-        df = pd.read_csv(log_file)
+    # Load prediction history
+    if os.path.exists('logs/prediction_log.csv'):
+        df = pd.read_csv('logs/prediction_log.csv')
         
-        if len(df) > 0:
-            st.write(f"**Total Predictions:** {len(df)}")
+        if not df.empty:
+            # Transform categorical values for better display
+            df_display = df.copy()
             
-            # Summary statistics
-            col1, col2, col3, col4 = st.columns(4)
-            with col1:
-                high_risk_count = sum(df['prediction'] == 1)
-                st.metric("High Risk Predictions", high_risk_count)
-            with col2:
-                low_risk_count = sum(df['prediction'] == 0)
-                st.metric("Low Risk Predictions", low_risk_count)
-            with col3:
-                avg_age = df['age'].mean()
-                st.metric("Average Age", f"{avg_age:.1f}")
-            with col4:
-                avg_confidence = df['probability'].mean()
-                st.metric("Average Confidence", f"{avg_confidence:.2%}")
+            # Transform sex column
+            df_display['sex'] = df_display['sex'].map({0: 'Female', 1: 'Male'})
             
-            # Show recent predictions
-            st.subheader("Recent Predictions")
-            recent_df = df.tail(10).copy()
-            recent_df['risk_level'] = recent_df['prediction'].apply(lambda x: 'High Risk' if x == 1 else 'Low Risk')
-            recent_df['probability_percent'] = (recent_df['probability'] * 100).round(1)
+            # Transform target/prediction column (if it exists)
+            if 'target' in df_display.columns:
+                df_display['target'] = df_display['target'].map({0: 'No Heart Disease', 1: 'Heart Disease'})
+            if 'prediction' in df_display.columns:
+                df_display['prediction'] = df_display['prediction'].map({0: 'No Heart Disease', 1: 'Heart Disease'})
             
-            # Display with better formatting
-            display_columns = ['timestamp', 'age', 'sex', 'risk_level', 'probability_percent']
-            column_config = {
-                'timestamp': 'Date & Time',
-                'age': 'Age',
-                'sex': st.column_config.SelectboxColumn(
-                    'Gender',
-                    options=[0, 1],
-                    format_func=lambda x: 'Female' if x == 0 else 'Male'
-                ),
-                'risk_level': 'Risk Level',
-                'probability_percent': st.column_config.NumberColumn(
-                    'Confidence %',
-                    format="%.1f%%"
-                )
-            }
+            # Transform other categorical columns if they exist
+            if 'cp' in df_display.columns:
+                chest_pain_map = {0: 'Typical Angina', 1: 'Atypical Angina', 2: 'Non-anginal Pain', 3: 'Asymptomatic'}
+                df_display['cp'] = df_display['cp'].map(chest_pain_map)
             
+            if 'fbs' in df_display.columns:
+                df_display['fbs'] = df_display['fbs'].map({0: 'No', 1: 'Yes'})
+            
+            if 'exang' in df_display.columns:
+                df_display['exang'] = df_display['exang'].map({0: 'No', 1: 'Yes'})
+            
+            if 'restecg' in df_display.columns:
+                restecg_map = {0: 'Normal', 1: 'ST-T Abnormality', 2: 'LV Hypertrophy'}
+                df_display['restecg'] = df_display['restecg'].map(restecg_map)
+            
+            if 'slope' in df_display.columns:
+                slope_map = {0: 'Upsloping', 1: 'Flat', 2: 'Downsloping'}
+                df_display['slope'] = df_display['slope'].map(slope_map)
+            
+            if 'thal' in df_display.columns:
+                thal_map = {0: 'Normal', 1: 'Fixed Defect', 2: 'Reversible Defect', 3: 'Unknown'}
+                df_display['thal'] = df_display['thal'].map(thal_map)
+            
+            # Display the dataframe with proper column configuration
             st.dataframe(
-                recent_df[display_columns],
-                column_config=column_config,
-                hide_index=True
+                df_display,
+                column_config={
+                    'sex': st.column_config.TextColumn('Gender'),
+                    'target': st.column_config.TextColumn('Target') if 'target' in df_display.columns else None,
+                    'prediction': st.column_config.TextColumn('Prediction') if 'prediction' in df_display.columns else None,
+                    'cp': st.column_config.TextColumn('Chest Pain Type') if 'cp' in df_display.columns else None,
+                    'fbs': st.column_config.TextColumn('Fasting Blood Sugar > 120') if 'fbs' in df_display.columns else None,
+                    'exang': st.column_config.TextColumn('Exercise Induced Angina') if 'exang' in df_display.columns else None,
+                    'restecg': st.column_config.TextColumn('Resting ECG') if 'restecg' in df_display.columns else None,
+                    'slope': st.column_config.TextColumn('ST Slope') if 'slope' in df_display.columns else None,
+                    'thal': st.column_config.TextColumn('Thalassemia') if 'thal' in df_display.columns else None,
+                    'age': st.column_config.NumberColumn('Age'),
+                    'trestbps': st.column_config.NumberColumn('Resting BP'),
+                    'chol': st.column_config.NumberColumn('Cholesterol'),
+                    'thalach': st.column_config.NumberColumn('Max Heart Rate'),
+                    'oldpeak': st.column_config.NumberColumn('ST Depression'),
+                    'ca': st.column_config.NumberColumn('Major Vessels'),
+                    'timestamp': st.column_config.DatetimeColumn('Timestamp') if 'timestamp' in df_display.columns else None,
+                },
+                use_container_width=True
             )
             
-            # Prediction trends
-            if len(df) > 1:
-                st.subheader("Prediction Trends")
-                df['date'] = pd.to_datetime(df['timestamp']).dt.date
-                daily_counts = df.groupby(['date', 'prediction']).size().unstack(fill_value=0)
-                
-                if len(daily_counts) > 1:
-                    fig, ax = plt.subplots(figsize=(12, 6))
-                    daily_counts.plot(kind='bar', stacked=True, ax=ax, color=['lightgreen', 'lightcoral'])
-                    ax.set_title('Daily Prediction Counts')
-                    ax.set_xlabel('Date')
-                    ax.set_ylabel('Number of Predictions')
-                    ax.legend(['Low Risk', 'High Risk'])
-                    plt.xticks(rotation=45)
-                    st.pyplot(fig)
-            
-            # Download full history
-            csv = df.to_csv(index=False)
+            # Add download button
+            csv = df_display.to_csv(index=False)
             st.download_button(
-                label="📥 Download Full History",
+                label="📥 Download Prediction History",
                 data=csv,
-                file_name=f"prediction_history_{datetime.now().strftime('%Y%m%d')}.csv",
+                file_name="prediction_history.csv",
                 mime="text/csv"
             )
             
+            # Show summary statistics
+            st.subheader("📈 Summary Statistics")
+            col1, col2, col3 = st.columns(3)
+            
+            with col1:
+                st.metric("Total Predictions", len(df_display))
+            
+            with col2:
+                if 'prediction' in df_display.columns:
+                    heart_disease_count = len(df_display[df_display['prediction'] == 'Heart Disease'])
+                    st.metric("Heart Disease Predictions", heart_disease_count)
+                elif 'target' in df_display.columns:
+                    heart_disease_count = len(df_display[df_display['target'] == 'Heart Disease'])
+                    st.metric("Heart Disease Cases", heart_disease_count)
+            
+            with col3:
+                if 'prediction' in df_display.columns:
+                    no_disease_count = len(df_display[df_display['prediction'] == 'No Heart Disease'])
+                    st.metric("No Heart Disease Predictions", no_disease_count)
+                elif 'target' in df_display.columns:
+                    no_disease_count = len(df_display[df_display['target'] == 'No Heart Disease'])
+                    st.metric("No Heart Disease Cases", no_disease_count)
+        
         else:
-            st.info("No predictions found in the log.")
+            st.info("No prediction history available.")
+    
     else:
-        st.info("No prediction history available. Make some predictions first!")
+        st.info("No prediction history file found. Make some predictions first!")
+        
+    # Add a button to clear history
+    if st.button("🗑️ Clear History", type="secondary"):
+        if st.button("⚠️ Confirm Clear History"):
+            if os.path.exists('logs/prediction_log.csv'):
+                os.remove('logs/prediction_log.csv')
+                st.success("Prediction history cleared!")
+                st.experimental_rerun()
 
 if __name__ == "__main__":
     main()
