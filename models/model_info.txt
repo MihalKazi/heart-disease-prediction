@@ -1,0 +1,3 @@
+Best Model: K-Nearest Neighbors
+Model Type: KNeighborsClassifier
+Features: 13 features
