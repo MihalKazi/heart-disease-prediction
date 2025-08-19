@@ -57,7 +57,6 @@ st.markdown("""
         border: 2px solid #f44336;
     }
     .low-risk {
-        background-color: #e8f5e8;
         border: 2px solid #4caf50;
     }
     .feature-importance {
