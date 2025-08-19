@@ -535,7 +535,7 @@ def main():
     create_directories()
     
     # Header
-    st.markdown('<h1 class="main-header">❤️ Mihal`s Heart Disease Prediction</h1>', unsafe_allow_html=True)
+    st.markdown('<h1 class="main-header">❤️ Mihal`s Heart Disease Prediction App</h1>', unsafe_allow_html=True)
     
     # Safety threshold information
     st.markdown(f"""
