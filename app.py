@@ -290,7 +290,7 @@ def generate_pdf_report(user_data, prediction, probability, feature_importance=N
         )
         
         # Center Name and Title
-        story.append(Paragraph("Kafi Sir's Heart Care Center", center_name_style))
+        story.append(Paragraph("Mihal's Heart Care Center", center_name_style))
         story.append(Paragraph("❤️ Heart Disease Prediction Report", title_style))
         story.append(Spacer(1, 20))
         
