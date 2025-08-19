@@ -27,7 +27,7 @@ SAFETY_THRESHOLD = 0.3  # Lower = more conservative (more likely to predict high
 
 # Set page config
 st.set_page_config(
-    page_title="Heart Disease Prediction",
+    page_title="Mihal's Heart Disease Prediction App",
     page_icon="❤️",
     layout="wide",
     initial_sidebar_state="expanded"
