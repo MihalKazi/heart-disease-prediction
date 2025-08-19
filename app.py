@@ -67,10 +67,9 @@ st.markdown("""
         margin: 1rem 0;
     }
     .safety-info {
-        background-color: #fff3cd;
         border: 1px solid #ffeaa7;
         padding: 1rem;
-        border-radius: 5px;
+        border-radius: 50px;
         margin: 1rem 0;
     }
 </style>
