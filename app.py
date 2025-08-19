@@ -53,7 +53,6 @@ st.markdown("""
         margin: 1rem 0;
     }
     .high-risk {
-        background-color: #ffebee;
         border: 2px solid #f44336;
     }
     .low-risk {
