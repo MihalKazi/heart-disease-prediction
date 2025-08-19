@@ -1,0 +1,43 @@
+name: Auto-Sync GitHub → Hugging Face Space
+
+on:
+  push:
+    branches: [main]       # Run on push to main
+  workflow_dispatch:       # Allow manual trigger
+
+jobs:
+  sync-to-hf:
+    runs-on: ubuntu-latest
+    steps:
+      # 1️⃣ Checkout GitHub repo
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+          lfs: true
+
+      # 2️⃣ Prepare folder for HF Space
+      - name: Prepare HF export folder
+        run: |
+          mkdir export_to_hf
+          # Copy all Python scripts
+          find . -maxdepth 1 -type f -name "*.py" -exec cp {} export_to_hf/ \;
+          # Copy requirements.txt and README.md if exist
+          cp requirements.txt export_to_hf/ 2>/dev/null || true
+          cp README.md export_to_hf/ 2>/dev/null || true
+          # Copy models folder if exists
+          cp -r models export_to_hf/ 2>/dev/null || true
+
+      # 3️⃣ Push to Hugging Face Space
+      - name: Push to Hugging Face Space
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          cd export_to_hf
+          git init
+          git config --global user.email "actions@github.com"
+          git config --global user.name "GitHub Actions"
+          git remote add hf https://$HF_TOKEN@huggingface.co/spaces/Mihalkazi/heart-disease.git
+          git checkout -b main
+          git add .
+          git commit -m "Auto-sync from GitHub"
+          git push --force hf main
