@@ -1,30 +1,33 @@
-name: Selective Sync to Hugging Face Space
+name: Auto-Sync GitHub → Hugging Face Space
 
 on:
   push:
-    branches: [main]       # Runs whenever you push to main branch
-  workflow_dispatch:       # Allows manual trigger
+    branches: [main]       # Run on push to main
+  workflow_dispatch:       # Allow manual trigger
 
 jobs:
   sync-to-hf:
     runs-on: ubuntu-latest
     steps:
-      # 1. Checkout GitHub repo
+      # 1️⃣ Checkout GitHub repo
       - uses: actions/checkout@v3
         with:
           fetch-depth: 0
           lfs: true
 
-      # 2. Prepare only needed files
-      - name: Copy selected files
+      # 2️⃣ Prepare folder for HF Space
+      - name: Prepare HF export folder
         run: |
           mkdir export_to_hf
-          cp app.py export_to_hf/
-          cp requirements.txt export_to_hf/
-          cp -r models export_to_hf/ || true
-          cp README.md export_to_hf/ || true
+          # Copy all Python scripts
+          find . -maxdepth 1 -type f -name "*.py" -exec cp {} export_to_hf/ \;
+          # Copy requirements.txt and README.md if exist
+          cp requirements.txt export_to_hf/ 2>/dev/null || true
+          cp README.md export_to_hf/ 2>/dev/null || true
+          # Copy models folder if exists
+          cp -r models export_to_hf/ 2>/dev/null || true
 
-      # 3. Push only selected files to Hugging Face
+      # 3️⃣ Push to Hugging Face Space
       - name: Push to Hugging Face Space
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
@@ -36,5 +39,5 @@ jobs:
           git remote add hf https://$HF_TOKEN@huggingface.co/spaces/Mihalkazi/heart-disease.git
           git checkout -b main
           git add .
-          git commit -m "Update selected files from GitHub"
+          git commit -m "Auto-sync from GitHub"
           git push --force hf main
